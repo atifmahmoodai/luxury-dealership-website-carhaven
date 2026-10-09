@@ -1,0 +1,49 @@
+services:
+  db:
+    image: postgres:17-bookworm
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD:?Set APP_DB_PASSWORD}
+    volumes:
+      - database:/var/lib/postgresql/data
+      - ./scripts/init-db.sh:/docker-entrypoint-initdb.d/10-app.sh:ro
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U postgres']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+  app:
+    build: .
+    environment:
+      DATABASE_URL: postgresql://carhaven:${APP_DB_PASSWORD}@db:5432/carhaven
+      SECRET_KEY: ${SECRET_KEY:?Set SECRET_KEY}
+      SITE_ORIGIN: https://${DOMAIN:?Set DOMAIN}
+      CLIENT_APPROVED: ${CLIENT_APPROVED:-0}
+      SITE_NAME: ${SITE_NAME:-CarHaven}
+      CONTACT_EMAIL: ${CONTACT_EMAIL:-}
+      CONTACT_PHONE: ${CONTACT_PHONE:-}
+      WHATSAPP: ${WHATSAPP:-}
+      ADDRESS: ${ADDRESS:-}
+      COMPANY_ABOUT: ${COMPANY_ABOUT:-}
+      CURRENCY: ${CURRENCY:-USD}
+      TRUST_PROXY: '1'
+    volumes: [photos:/data/photos]
+    depends_on:
+      db: {condition: service_healthy}
+    restart: unless-stopped
+  proxy:
+    image: caddy:2
+    environment: {DOMAIN: '${DOMAIN}'}
+    ports: ['80:80','443:443']
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on: [app]
+    restart: unless-stopped
+volumes:
+  database:
+  photos:
+  caddy_data:
+  caddy_config:
