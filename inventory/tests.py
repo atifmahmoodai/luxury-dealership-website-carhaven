@@ -6,7 +6,7 @@ from django.test import TestCase,Client,override_settings
 from django.core import signing
 from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.contrib.auth.models import User
+from django.contrib.auth.models import User,Permission
 from django.urls import reverse
 from .models import Vehicle,Photo,Enquiry
 
@@ -53,6 +53,19 @@ class InventoryTests(TestCase):
   self.client.force_login(user)
   self.assertEqual(self.client.get(reverse('admin:inventory_vehicle_change',args=[self.car.pk])).status_code,403)
   self.client.logout();self.assertEqual(self.client.get('/staff/').status_code,302)
+ def test_removed_staff_flag_revokes_private_photo_access(self):
+  photo=Photo.objects.create(vehicle=self.car,image=self.image(),alt='Private draft')
+  user=User.objects.create_user('former-staff',password='Fictional-testing-password-27!')
+  user.user_permissions.add(Permission.objects.get(codename='view_vehicle'))
+  self.client.force_login(user);self.assertEqual(self.client.get(photo.get_absolute_url()).status_code,404)
+ def test_publishing_cannot_delete_final_photo_in_same_form(self):
+  from django.forms.models import inlineformset_factory
+  from .admin import PhotoFormSet
+  photo=Photo.objects.create(vehicle=self.car,image=self.image(),alt='Draft')
+  self.car.state='available'
+  formset=inlineformset_factory(Vehicle,Photo,formset=PhotoFormSet,fields=['image','alt','position'],extra=0,can_delete=True)
+  bound=formset(data={'photos-TOTAL_FORMS':'1','photos-INITIAL_FORMS':'1','photos-MIN_NUM_FORMS':'0','photos-MAX_NUM_FORMS':'1000','photos-0-id':str(photo.id),'photos-0-vehicle':str(self.car.id),'photos-0-alt':'Draft','photos-0-position':'0','photos-0-DELETE':'on'},instance=self.car,prefix='photos')
+  self.assertFalse(bound.is_valid());self.assertIn('retain at least one',str(bound.non_form_errors()))
  def test_enquiry_persists_once_and_does_not_send_email(self):
   self.publish();url='/contact/?vehicle='+str(self.car.id)
   token=self.client.get(url).context['form'].initial['token']

@@ -44,7 +44,7 @@ def vehicle(request,pk):
 @require_GET
 def photo(request,pk):
  item=get_object_or_404(Photo,pk=pk)
- if not collection().filter(pk=item.vehicle_id).exists() and not (request.user.is_active and request.user.has_perm('inventory.view_vehicle')):raise Http404
+ if not collection().filter(pk=item.vehicle_id).exists() and not (request.user.is_active and request.user.is_staff and request.user.has_perm('inventory.view_vehicle')):raise Http404
  try:response=FileResponse(item.image.open('rb'),content_type='image/jpeg')
  except FileNotFoundError:raise Http404
  response['Content-Disposition']='inline; filename="vehicle.jpg"'

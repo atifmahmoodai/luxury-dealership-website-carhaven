@@ -1,10 +1,20 @@
 from django.contrib import admin
+from django.forms.models import BaseInlineFormSet
+from django.core.exceptions import ValidationError
 from .models import Vehicle,Photo,Enquiry
 admin.site.site_header='CarHaven · Inventory studio'
 admin.site.site_title='CarHaven staff'
 admin.site.index_title='Manage the collection'
+class PhotoFormSet(BaseInlineFormSet):
+ def clean(self):
+  super().clean()
+  if any(self.errors):return
+  if self.instance.state in ('available','reserved','sold') and not self.instance.is_demo:
+   remaining=[f for f in self.forms if f.cleaned_data and not f.cleaned_data.get('DELETE') and f.cleaned_data.get('image')]
+   if not remaining:raise ValidationError('A published vehicle must retain at least one approved photo.')
 class PhotoInline(admin.TabularInline):
  model=Photo
+ formset=PhotoFormSet
  extra=0
  def has_delete_permission(self,request,obj=None):return obj is None or obj.state=='draft'
 @admin.register(Vehicle)
